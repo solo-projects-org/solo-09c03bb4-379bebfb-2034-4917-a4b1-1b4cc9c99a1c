@@ -1,7 +1,8 @@
 /* Service Worker：首次在线打开后缓存应用外壳，断网刷新仍可采集 */
 "use strict";
 
-const CACHE = "forest-patrol-v1";
+// 版本号随外壳资源更新而提升：activate 时清理旧缓存，保证新 app.js 生效
+const CACHE = "forest-patrol-v2";
 const SHELL = [
   "/",
   "/static/app.js",
@@ -54,12 +55,18 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // 静态资源：缓存优先，未命中再联网并补缓存
+  // 静态资源：stale-while-revalidate——先用缓存保证离线/秒开，
+  // 同时后台拉取新版本写入缓存，下次加载即生效
   event.respondWith(
-    caches.match(req).then(hit => hit || fetch(req).then(resp => {
-      const copy = resp.clone();
-      caches.open(CACHE).then(c => c.put(req, copy));
-      return resp;
-    }))
+    caches.match(req).then(hit => {
+      const network = fetch(req).then(resp => {
+        if (resp.ok) {
+          const copy = resp.clone();
+          caches.open(CACHE).then(c => c.put(req, copy));
+        }
+        return resp;
+      }).catch(() => hit);
+      return hit || network;
+    })
   );
 });
