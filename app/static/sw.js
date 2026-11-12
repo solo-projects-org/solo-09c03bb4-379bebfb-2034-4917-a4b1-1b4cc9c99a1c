@@ -1,7 +1,9 @@
 /* Service Worker：首次在线打开后缓存应用外壳，断网刷新仍可采集 */
 "use strict";
 
-const CACHE = "forest-patrol-v1";
+// 版本号随应用外壳内容变更而递增：激活时清除旧缓存，
+// 确保各标签页拿到最新的采集页脚本（v2：多标签页队列自动同步）。
+const CACHE = "forest-patrol-v2";
 const SHELL = [
   "/",
   "/static/app.js",

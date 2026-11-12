@@ -11,6 +11,7 @@
 | 待传记录不丢 | 记录（含照片 Blob）存入浏览器 IndexedDB，刷新、关机重启均在 |
 | 回网点补传，坐标+原照入 SQLite | `POST /api/records`（multipart），照片落盘、元数据入库 |
 | 收到确认才移出待传 | 浏览器仅在收到服务器 `{"ok": true}` 响应后才删除 IndexedDB 中的该笔 |
+| 多标签页待传列表自动一致 | 队列的已提交变动（保存成功 / 补传确认后删除）经 BroadcastChannel 广播（老浏览器退回 `storage` 事件）；其他采集页收到通知即重读 IndexedDB 刷新列表与总数，无需手动刷新；切回前台（`visibilitychange`/`pageshow`/`focus`）也会自动重读；刷新只更新待传列表，绝不改动正在填写的表单 |
 | 确认丢失，重传只入库一次 | 每笔记录保存时生成 UUID 作幂等键；`records.uuid` 唯一约束，重复提交返回 `duplicate: true` 直接确认，不重复写行、不重复存照片 |
 | 入库后才供清障队查看 | `/records` 页面只渲染 SQLite 中已确认的记录 |
 | 随附样例照片 | `app/static/sample-photo.png`（演示时无相机可点"使用样例照片"，离线也能取到） |
@@ -41,6 +42,17 @@ SQLite 与已入库原照持久化在命名卷 `patrol-data`（容器内 `/data`
 再次补传时服务器按 UUID 判重，返回 `duplicate: true`，浏览器正常移出待传，
 SQLite 中始终只有一行。
 
+## 演示：两个标签页自动同步待传列表
+
+1. 在同一浏览器开两个 `http://localhost:8000` 标签页（记为 A、B）。
+2. **断网**（DevTools Offline 或 `docker compose stop`）。
+3. 在 A 页保存一笔倒木记录 —— **B 页无需手动刷新**，待传列表与总数自动 +1。
+4. **恢复网络**，在 A 页点 **📤 补传全部待传记录** —— 每笔收到确认并从本机队列删除后，
+   A、B 两页同时移除该笔。
+5. 交错操作也安全：A 页保存的同时 B 页补传，刚存好的记录不会漏，
+   已移除的记录不会重新出现；B 页正在填写的表单不受列表刷新影响。
+6. 把某个标签页切到后台再切回，它会自动重读本机队列，与最新状态对齐。
+
 ## 本地开发（不用 Docker）
 
 ```bash
@@ -60,7 +72,7 @@ DATA_DIR=./data python3 app/app.py        # 或：gunicorn --chdir app -b 0.0.0.
 │   │   ├── index.html      # 采集页（巡护员）
 │   │   └── records.html    # 已入库记录页（清障队）
 │   └── static/
-│       ├── app.js          # IndexedDB 待传队列 + 补传逻辑
+│       ├── app.js          # IndexedDB 待传队列 + 补传逻辑 + 跨标签页队列同步
 │       ├── sw.js           # Service Worker（离线外壳缓存）
 │       ├── style.css
 │       └── sample-photo.png# 随附样例照片
